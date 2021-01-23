@@ -1,5 +1,5 @@
 # CuraSnapmakerSender
-Plugin for Cura which adds an Image to the exported gcode.
+Plugin for Cura which adds an Image to the exported gcode and Snapmaker-specific informateion. Additionally it serves you wtith the ability to directly send Gcode from within Cura to your Snapmaker.
 
 # Installation
 Copy the contents to a folder in the plugins directory of cura:

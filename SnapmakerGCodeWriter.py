@@ -122,7 +122,7 @@ class SnapmakerGCodeWriter(MeshWriter):
             #Logger.log("d",x+":"+str(int(feature_times[x])) + " Seconds")
             estiTime += int(feature_times[x])
         # Generate snapshot
-        self.snapshot = self._createSnapshot()
+        self._snapshot = self._createSnapshot()
         Logger.log("d","Snapshot created.")
         thumbnail_buffer = QBuffer()
         thumbnail_buffer.open(QBuffer.ReadWrite)

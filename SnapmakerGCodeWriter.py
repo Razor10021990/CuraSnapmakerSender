@@ -122,15 +122,17 @@ class SnapmakerGCodeWriter(MeshWriter):
             #Logger.log("d",x+":"+str(int(feature_times[x])) + " Seconds")
             estiTime += int(feature_times[x])
         # Generate snapshot
-        self.snapshot = self._createSnapshot()
-        Logger.log("d","Snapshot created.")
-        thumbnail_buffer = QBuffer()
-        thumbnail_buffer.open(QBuffer.ReadWrite)
-        thumbnail_image = self._snapshot
-        thumbnail_image.save(thumbnail_buffer, "PNG")
-        base64_bytes = base64.b64encode(thumbnail_buffer.data())
-        base64_message = base64_bytes.decode('ascii')
-        thumbnail_buffer.close()
+        self._snapshot = self._createSnapshot()
+        base64_message = ""
+        if self._snapshot:
+            thumbnail_buffer = QBuffer()
+            thumbnail_buffer.open(QBuffer.ReadWrite)
+            thumbnail_image = self._snapshot
+            thumbnail_image.save(thumbnail_buffer, "PNG")
+            base64_bytes = base64.b64encode(thumbnail_buffer.data())
+            base64_message = base64_bytes.decode('ascii')
+            thumbnail_buffer.close()
+
         # Start header
         stream.write(";Header Start\n\n")
         gcode_buffer = ""

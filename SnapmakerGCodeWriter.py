@@ -137,7 +137,7 @@ class SnapmakerGCodeWriter(MeshWriter):
         stream.write(";Header Start\n\n")
         gcode_buffer = ""
         header_buffer = False
-        model_line_count = 0
+        model_line_count = 24 # Initialise to Luban header line count
         if gcode_list is not None:
             has_settings = False
             for gcode in gcode_list:
@@ -145,11 +145,15 @@ class SnapmakerGCodeWriter(MeshWriter):
                     has_settings = True
                 # Move FLAVOR/TIME/... block to top
                 if "FLAVOR" not in gcode:
-                    model_line_count += len(gcode.splitlines()) # Add lines to model_line_count for header
+                    model_line_count += len(gcode.splitlines()) + 1 # Add lines to model_line_count for header
                     gcode_buffer += gcode + '\n' # Add extra newline for each layer, for readability of gcode
                 else:
                     # Split header lines and write to buffer
                     header_buffer = gcode.splitlines(keepends=True)
+            # Serialise the current container stack.
+            if not has_settings:
+                settings = self._serialiseSettings(Application.getInstance().getGlobalContainerStack())
+                model_line_count += len(settings.splitlines())
             # Combine everything
             stream.write(header_buffer[0]) # FLAVOR
             stream.write(header_buffer[1]) # TIME
@@ -168,14 +172,13 @@ class SnapmakerGCodeWriter(MeshWriter):
             stream.write(header_buffer[5].replace('MINY:','min_y(mm): ')) # min_y
             stream.write(header_buffer[6].replace('MINZ:','min_z(mm): ')) # min_z
             stream.write("\n;Header End\n\n")
-            # Add some useful comments, conform Luban generated code, and/or what I deem usefull
+            # Add some useful comments, conform Luban generated code, and/or what I deem useful
             gcode_buffer = re.sub(r"(M109 S\d+)",r"\1 ;Wait for Hotend Temperature",gcode_buffer)
             gcode_buffer = re.sub(r"(M190 S\d+)",r"\1 ;Wait for Bed Temperature",gcode_buffer)
             gcode_buffer = re.sub(r"(G92 E0)",r"\1 ;Reset the extruder's origin/length",gcode_buffer)
             stream.write(gcode_buffer)
-            # Serialise the current container stack and put it at the end of the file.
+            # Put the serialised current container stack at the end of the file.
             if not has_settings:
-                settings = self._serialiseSettings(Application.getInstance().getGlobalContainerStack())
                 stream.write(settings)
             return True
 

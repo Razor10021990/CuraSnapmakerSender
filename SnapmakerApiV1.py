@@ -182,12 +182,15 @@ class SnapmakerApiV1(threading.Thread):
             except Exception as e:
                 self.state = SnapmakerApiState.FATAL
                 self.running = False
+                self._log.debug('Exception in SnapmakerApi:')
+                self._log.debug(e)
                 self._log.debug('Thread SnapmakerApi finished')
                 return
             else:
                 if result is None:
                     self.state = SnapmakerApiState.FATAL
                     self.running = False
+                    self._log.debug('No result gotten')
                     self._log.debug('Thread SnapmakerApi finished')
                     return FALSE
                 elif result == 204:
@@ -401,6 +404,7 @@ class SnapmakerApiV1(threading.Thread):
                     else:
                         self.state = SnapmakerApiState.IDLE
         self.running = False
+        self._log.debug('Normal Exit Snapmaker Api')
         self._log.debug('Thread SnapmakerApi finished')
             
 

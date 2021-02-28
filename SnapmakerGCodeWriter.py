@@ -160,7 +160,9 @@ class SnapmakerGCodeWriter(MeshWriter):
             stream.write(header_buffer[2]) # Filament used
             stream.write(header_buffer[3]) # Layer height
             stream.write("\n\n;header_type: 3dp\n")
-            stream.write(";thumbnail: data:image/png;base64,"+base64_message+"\n")
+            if len(base64_message)>0:
+                stream.write(";thumbnail: data:image/png;base64,"+base64_message+"\n")
+                model_line_count = model_line_count - 1
             stream.write(";file_total_lines: "+str(model_line_count)+"\n")
             stream.write(";estimated_time(s): "+str(estiTime)+"\n")
             stream.write(";nozzle_temperature(°C): "+str(printTemp)+"\n")

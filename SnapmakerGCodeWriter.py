@@ -137,7 +137,7 @@ class SnapmakerGCodeWriter(MeshWriter):
         stream.write(";Header Start\n\n")
         gcode_buffer = ""
         header_buffer = False
-        model_line_count = 24 # Initialise to Luban header line count
+        model_line_count = 23 # Initialise to Luban header line count
         if gcode_list is not None:
             has_settings = False
             for gcode in gcode_list:
@@ -162,7 +162,7 @@ class SnapmakerGCodeWriter(MeshWriter):
             stream.write("\n\n;header_type: 3dp\n")
             if len(base64_message)>0:
                 stream.write(";thumbnail: data:image/png;base64,"+base64_message+"\n")
-                model_line_count = model_line_count - 1
+                model_line_count = model_line_count + 1
             stream.write(";file_total_lines: "+str(model_line_count)+"\n")
             stream.write(";estimated_time(s): "+str(estiTime)+"\n")
             stream.write(";nozzle_temperature(°C): "+str(printTemp)+"\n")

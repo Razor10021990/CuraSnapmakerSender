@@ -393,6 +393,19 @@ class CuraSnapmakerSenderOutputDevice(OutputDevice): #We need an actual device t
             self.writeSuccess.emit()
         else:
             self.writeError.emit()
+
+        print_name = CuraApplication.getInstance().getPrintInformation().jobName
+        message = Message(
+           i18n_catalog.i18nc("@message", "Successfully sent '%s' to %s") % (print_name, self._nameofSnapmaker),
+           lifetime=30,dismissable=True,title='Success')
+        message.show()
+
+        # Disconnect after upload so user can operate printer to select file.
+        self._printer.setBlocking(False)
+        self._printer.disconnect()
+        self._printer.setBlocking(True)
+        self._printer = SnapmakerApiV1.SnapmakerApiV1(self._uri,self._token)
+
     def tearDown(self):
         self._printer.disconnect()
 

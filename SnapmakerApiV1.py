@@ -165,7 +165,7 @@ class SnapmakerApiV1(threading.Thread):
         #self.conn.request('POST','/api/v1/connect',,{'Content-Type': 'application/x-www-form-urlencoded'})
         try:
             resp =self._session.post("http://"+self._uri+":8080/api/v1/connect",data="token="+self.token,headers={'Content-Type': 'application/x-www-form-urlencoded'},timeout=1.0)
-        except (TimeoutError, requests.exceptions.ConnectTimeout):
+        except (ConnectionError,TimeoutError, requests.exceptions.ConnectTimeout):
             return False
         #response = self.conn.getresponse()
         if resp.status_code == requests.codes.ok :

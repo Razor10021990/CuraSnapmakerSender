@@ -1,13 +1,18 @@
 # Copyright (c) 2017 Ultimaker B.V.
 # This example is released under the terms of the AGPLv3 or higher.
 
+from asyncio.log import logger
+from asyncio.windows_events import NULL
+from distutils.log import Log
+import imp
 import os.path #To get a file name to write to.
 import socket
 from typing import Dict, Type, TYPE_CHECKING, List, Optional, cast
 import json
 import threading
+from collections import namedtuple
 from io import BytesIO, StringIO
-from PyQt5.QtWidgets import QPushButton
+import typing
 from . import SnapmakerGCodeWriter
 
 from UM.Application import Application #To find the scene to get the current g-code to write.
@@ -26,25 +31,29 @@ from UM.Qt.ListModel import ListModel
 import UM.PluginError
 
 from cura.CuraApplication import CuraApplication
-
-from PyQt5.QtCore import QObject, QThread, QTimer, pyqtProperty, pyqtSignal, pyqtSlot,Qt
-from PyQt5.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager
-from PyQt5.QtNetwork import QNetworkReply
-from PyQt5.QtQuick import QQuickWindow
-from PyQt5.QtWidgets import QPushButton
-from PyQt5.QtQml import qmlRegisterType,QQmlListProperty
+from PyQt6.QtCore import QModelIndex,QByteArray,QObject, QThread, QTimer, pyqtProperty, pyqtSignal, pyqtSlot,Qt,QAbstractTableModel,QVariant
+from PyQt6.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager
+from PyQt6.QtNetwork import QNetworkReply
+from PyQt6.QtQuick import QQuickWindow
+from PyQt6.QtWidgets import QPushButton
+from PyQt6.QtQml import qmlRegisterType,QQmlListProperty
 
 from . import SnapmakerApiV1
 
 i18n_catalog = i18nCatalog("cura")
 
-class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
+machinePrototype = namedtuple('Machine',['name','address','token'])
+
+class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QAbstractTableModel,QObject):
     autodiscoverychanged = pyqtSignal() 
     machineschanged = pyqtSignal()
     def __init__(self, parent = None) -> None:
         #Logger.log("d","Initializing CuraSnapmakerSenderPlugin")
         Extension.__init__(self)
         QObject.__init__(self)
+        QAbstractTableModel.__init__(self)
+        
+        self.machines : List[machinePrototype] = list()
 
         self.setMenuName(i18n_catalog.i18nc("@item:inmenu", "CuraSnapmakerSender"))
         self.addMenuItem(i18n_catalog.i18nc("@item:inmenu", "Settings"), self.showSettings)
@@ -74,7 +83,7 @@ class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
             #Logger.log("d","Auto-Discovery Enabled")
             self._discoveryThread = threading.Thread(target=self.timedDiscovering)
             self._discoveryThread.start()
-        elif(not self.settings["AutoDiscover"] and self._discoveryThread.is_alive()):
+        elif(not self.settings["AutoDiscover"] and self._discoveryThread and self._discoveryThread.is_alive()):
             #Logger.log("d","Auto-Discovery Disabled")
             self._stop_discovery_event.set()
 
@@ -92,17 +101,6 @@ class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
         self.autodiscoverychanged.emit()
         #self._autodiscover = autodiscover
 
-    @pyqtProperty(ListModel)
-    def machines(self) -> ListModel:
-        
-        return self._manualprinters
-                                
-
-    @machines.setter
-    def machines(self,machines):
-        self._manualprinters = machines
-        self.machineschanged.emit()
-        #Logger.log("d","machines set : "+ str(machines))
 
     def stop(self):
         self._stop_discovery_event.set()
@@ -123,12 +121,9 @@ class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
             #Logger.log("d","Auto-Discovery Enabled")
             self._discoveryThread = threading.Thread(target=self.timedDiscovering)
             self._discoveryThread.start()
-        self._manualprinters = ListModel()
-        self._manualprinters.addRoleName(Qt.UserRole +1 ,"name")
-        self._manualprinters.addRoleName(Qt.UserRole +2 ,"address")
+        self._manualprinters : List[machinePrototype] = list()
         for x in self.settings["machines"]:
-            printer = x
-            self._manualprinters.appendItem(printer)
+            self._manualprinters.append(machinePrototype(x[0],x[1],x[2]))
         
 
         #Logger.log("d","Getting Item result : "+str(self._manualprinters.getItem(0)))
@@ -165,7 +160,7 @@ class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
     def saveSettings(self):
         path = PluginRegistry.getInstance().getPluginPath(self.getPluginId())
         arr = list()
-        for x in self._manualprinters.items:
+        for x in self._manualprinters:
             arr.append(x)
         #Logger.log("d",arr)
         self.settings["machines"] = arr
@@ -212,7 +207,7 @@ class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
     def managePrinters(self):
         #Logger.log("d","Managing manually added printers")
         old_printers = [x for x in self._active_added_Printers]
-        printers = self._manualprinters.items
+        printers = self._manualprinters
         for printer in printers:
             try:
                 in_list = False
@@ -228,13 +223,14 @@ class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
                     self.removePrinter(printer)
                     in_list = False
                     for old_printer in self._active_discovered_Printers:
-                        if old_printer["address"] == printer["address"]:
+                        if old_printer.address == printer.address:
                             #Logger.log("d","Already in list " + str(printer))
                             self._active_discovered_Printers.remove(old_printer)
                             in_list = True
                     if not self.addPrinter(printer):#and add the manual version 
                         #raise Exception("Problem with manually added printer")
-                        self._manualprinters.removeItem(self._manualprinters.find('address',printer['address']))
+                        to_remove = [[record.a, record.b] for record in self._manualprinters if record.address == printer.address][0]
+                        self._manualprinters.remove(to_remove)
                 #Logger.log("d","Added manually " + str(printer))
         for printer_remove in old_printers:
             #Logger.log("d","Removed " + str(printer_remove))
@@ -244,20 +240,20 @@ class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
     def addPrinter(self, printer):
         #Logger.log("d","Adding "+printer['name']+printer['address']+ " OutputDevice")
         token = ''
-        if printer['address'] in self._tokenregistry:
-           token = self._tokenregistry[printer['address']]
-        if self.getOutputDeviceManager().getOutputDevice(printer['address']):
+        if printer.address in self._tokenregistry:
+           token = self._tokenregistry[printer.address]
+        if self.getOutputDeviceManager().getOutputDevice(printer.address):
             return False #already added
         else:
-            self.getOutputDeviceManager().addOutputDevice(CuraSnapmakerSenderOutputDevice(printer['address'],printer['name'],token=token))
+            self.getOutputDeviceManager().addOutputDevice(CuraSnapmakerSenderOutputDevice(printer.address,printer.name,token=token))
             return True
 
     def removePrinter(self, printer_remove:Dict):
         
-        printer = self.getOutputDeviceManager().getOutputDevice(printer_remove['address'])
+        printer = self.getOutputDeviceManager().getOutputDevice(printer_remove.address)
         # STore the token in the tokenregistry, maybe we can reuse it
         try:
-            self._tokenregistry[printer_remove['address']]= printer._token
+            self._tokenregistry[printer_remove.address]= printer.token
         except AttributeError:
             pass
         printer.tearDown()
@@ -273,13 +269,86 @@ class CuraSnapmakerSenderPlugin(Extension,OutputDevicePlugin,QObject):
     def _createSettingsDialogue(self) -> QQuickWindow:
         qml_file_path = os.path.join(PluginRegistry.getInstance().getPluginPath(self.getPluginId()), "CuraSnapmakerSenderSettings.qml")
         component = Application.getInstance().createQmlComponent(qml_file_path,{"manager": self})
+        print(component)
         return component
+
     @pyqtSlot()
     def _appendEmptyPrinter(self):
-        self.machines.appendItem({'name': 'MySnapmaker'+ str(self.machines.count+1),'address':'192.168.0.'+str(self.machines.count+1)})
+        self.beginInsertRows(QModelIndex(),self.rowCount(QModelIndex()),self.rowCount(QModelIndex()))
+        Logger.debug(str(len(self._manualprinters)))
+        self._manualprinters.append(machinePrototype('MySnapmaker'+ str(len(self._manualprinters)+1),'192.168.0.'+str(len(self._manualprinters)+1),''))
+        Logger.debug(str(len(self._manualprinters)))
+        
+        self.endInsertRows()
     @pyqtSlot(int)
     def _removePrinterfromList(self, index:int):
-       self.machines.removeItem(index)
+        self.beginRemoveRows(QModelIndex(),index,index)
+        self._manualprinters.pop(index-1)
+        self.endRemoveRows()
+    @pyqtSlot(str)
+    def headerData(self, section: int, orientation: Qt.Orientation, role: int = ...) -> typing.Any:
+        Logger.debug("HeaderData")
+        if role == Qt.ItemDataRole.DisplayRole:
+            if orientation == Qt.Orientation.Horizontal:
+                if section == 0:
+                    return "Name"
+                else:
+                    return "Address(IPv4,IPv6,Hostname)"
+        return False
+
+    def rowCount(self, index):
+        Logger.debug(len(self._manualprinters)+1)
+        return len(self._manualprinters)+1
+
+    def columnCount(self, index):
+        return int(2)
+
+    @pyqtSlot(QModelIndex,Qt.ItemDataRole,result=QVariant)
+    def data(self, index, role):
+        Logger.debug("Role: "+str(role))
+        if not index.isValid():
+            return QVariant()
+       
+        if role == Qt.ItemDataRole.DisplayRole or role == Qt.ItemDataRole.EditRole:
+            if index.row() == 0 :
+                if index.column() == 0:
+                    value = "Name"
+                else :
+                    value = "IP-Address"
+                return value
+            myvalue = self._manualprinters[index.row()-1]
+            if index.column() == 0:
+                value = myvalue.name
+            else :
+                value = myvalue.address
+            return str(value)
+        return QAbstractTableModel.data(index,role)
+
+    def setData(self, index, value, role):
+        if index.row() == 0 :
+            return False
+        if role == Qt.EditRole:
+            try:
+                value = str(value)
+            except ValueError:
+                return False
+            if index.column() == 0:
+                self._manualprinters[index.row()-1].name = value
+            else :
+                self._manualprinters[index.row()-1].address = value
+            return True
+        return False
+    @pyqtSlot(QModelIndex,result=Qt.ItemFlag)
+    def flags(self, index):
+        Logger.debug("Flags")
+        if index.row() == 0:
+            return super().flags(index)
+        return super().flags(index) | Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
+        #return Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | 
+    def roleNames(self) -> typing.Dict[int, 'QByteArray']:
+        names = super().roleNames()
+        Logger.debug(names)
+        return names
 
                 
        
@@ -425,9 +494,9 @@ def discover_Snapmaker() :
             data,server = sock.recvfrom(4096)
             response = data.decode()
             datasplit = response.split('|')
-            printer = {}
-            printer['name'],printer['address'] = datasplit[0].split('@')
-            to_log = "Found: "+printer['name']+"("+printer['address']+")"
+            printer = machinePrototype('','','')
+            printer.name,printer.address = datasplit[0].split('@')
+            to_log = "Found: "+printer.name+"("+printer.address+")"
             Logger.log("d", to_log)
             for token in datasplit[1:]:
                 identifier,value = token.split(':')

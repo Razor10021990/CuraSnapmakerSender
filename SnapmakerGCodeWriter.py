@@ -15,7 +15,7 @@ from cura.CuraApplication import CuraApplication
 from cura.Snapshot import Snapshot
 from cura.Utils.Threading import call_on_qt_thread
 from cura.UI import PrintInformation
-from PyQt5.QtCore import QByteArray,QIODevice,QBuffer
+from PyQt6.QtCore import QByteArray,QIODevice,QBuffer
 
 from UM.i18n import i18nCatalog
 catalog = i18nCatalog("cura")
